@@ -29,7 +29,10 @@ object JsonSchema2PoJoPlugin extends AutoPlugin {
     jsonSchemas in jsonSchema2PoJo <<= (resourceDirectory in Compile)(resources =>
       (resources / "json-schemas").listFiles(new FilenameFilter {
         override def accept(dir: File, name: String): Boolean = name.endsWith(".json")
-      })
+      }) match {
+        case null => Seq[File]()
+        case files => files
+      }
     ),
     jsonSchema2PoJo :=
       JsonSchema2PoJo((jsonSchemas in jsonSchema2PoJo).value,
