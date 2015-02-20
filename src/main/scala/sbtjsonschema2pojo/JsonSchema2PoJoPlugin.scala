@@ -14,19 +14,29 @@ object JsonSchema2PoJoPlugin extends AutoPlugin {
 
   object autoImport {
     lazy val jsonSchema2PoJo = taskKey[Seq[File]]("Generate Java PoJo from Json Schemas")
+
+    lazy val jsonSchemasDefault = settingKey[Seq[File]]("Default Json Schemas")
     lazy val jsonSchemas = settingKey[Seq[File]]("Json Schemas")
+
+    lazy val pojoPackageDefault = settingKey[String]("Default PoJo package")
     lazy val pojoPackage = settingKey[String]("PoJo package")
+
+    lazy val pojoFilesDefault = settingKey[File]("Default PoJo output files path")
     lazy val pojoFiles = settingKey[File]("PoJo output files path")
   }
 
   import sbtjsonschema2pojo.JsonSchema2PoJoPlugin.autoImport._
 
   lazy val jsonSchema2PoJoSettings: Seq[Def.Setting[_]] = Seq(
-    pojoPackage in jsonSchema2PoJo := "PoJo",
-    pojoFiles in jsonSchema2PoJo <<= (sourceManaged in Compile)(sourceManaged =>
+    pojoPackageDefault in jsonSchema2PoJo := "PoJo",
+    pojoPackage in jsonSchema2PoJo <<= (pojoPackage in jsonSchema2PoJo) or (pojoPackageDefault in jsonSchema2PoJo),
+  
+    pojoFilesDefault in jsonSchema2PoJo <<= (sourceManaged in Compile)(sourceManaged =>
       sourceManaged / "jsnomschema2pojo"
     ),
-    jsonSchemas in jsonSchema2PoJo <<= (resourceDirectory in Compile)(resources =>
+    pojoFiles in jsonSchema2PoJo <<= (pojoFiles in jsonSchema2PoJo) or (pojoFilesDefault in jsonSchema2PoJo),
+  
+    jsonSchemasDefault in jsonSchema2PoJo <<= (resourceDirectory in Compile)(resources =>
       (resources / "json-schemas").listFiles(new FilenameFilter {
         override def accept(dir: File, name: String): Boolean = name.endsWith(".json")
       }) match {
@@ -34,6 +44,8 @@ object JsonSchema2PoJoPlugin extends AutoPlugin {
         case files => files
       }
     ),
+    jsonSchemas in jsonSchema2PoJo <<= (jsonSchemas in jsonSchema2PoJo) or (jsonSchemasDefault in jsonSchema2PoJo),
+
     jsonSchema2PoJo :=
       JsonSchema2PoJo((jsonSchemas in jsonSchema2PoJo).value,
         (pojoPackage in jsonSchema2PoJo).value,
