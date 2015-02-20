@@ -71,7 +71,7 @@ object JsonSchema2PoJo {
       sources.map { source =>
         val name = source.getName.split('.')(0)
         logger.info(f"Generate PoJo: $pkg.$name")
-        schemaMapper.generate(codeModel, name, pkg, source.toURI.toURL)
+        schemaMapper.generate(codeModel, name, f"$pkg.$name", source.toURI.toURL)
       }
 
       codeModel.build(outputs, null.asInstanceOf[PrintStream])
