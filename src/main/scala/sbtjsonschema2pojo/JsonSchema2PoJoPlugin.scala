@@ -39,7 +39,6 @@ object JsonSchema2PoJoPlugin extends AutoPlugin {
         (pojoPackage in jsonSchema2PoJo).value,
         (pojoFiles in jsonSchema2PoJo).value,
         streams.value.log("jsonschema2pojo")),
-    javaSource <<= (pojoFiles in jsonSchema2PoJo),
     sourceGenerators in Compile += jsonSchema2PoJo.taskValue
   )
 
