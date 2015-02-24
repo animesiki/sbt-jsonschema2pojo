@@ -23,6 +23,9 @@ object JsonSchema2PoJoPlugin extends AutoPlugin {
 
     lazy val pojoFilesDefault = settingKey[File]("Default PoJo output files path")
     lazy val pojoFiles = settingKey[File]("PoJo output files path")
+    
+    lazy val dedicatedSchemaPkgDefault = settingKey[Boolean]("Default setting to PoJo output to pkg include schema name")
+    lazy val dedicatedSchemaPkg = settingKey[Boolean]("PoJo output to pkg include schema name")
   }
 
   import sbtjsonschema2pojo.JsonSchema2PoJoPlugin.autoImport._
@@ -46,9 +49,13 @@ object JsonSchema2PoJoPlugin extends AutoPlugin {
     ),
     jsonSchemas in jsonSchema2PoJo <<= (jsonSchemas in jsonSchema2PoJo) or (jsonSchemasDefault in jsonSchema2PoJo),
 
+    dedicatedSchemaPkgDefault in jsonSchema2PoJo := true,
+    dedicatedSchemaPkg in jsonSchema2PoJo <<= (dedicatedSchemaPkg in jsonSchema2PoJo) or (dedicatedSchemaPkgDefault in jsonSchema2PoJo),
+  
     jsonSchema2PoJo :=
       JsonSchema2PoJo((jsonSchemas in jsonSchema2PoJo).value,
         (pojoPackage in jsonSchema2PoJo).value,
+        (dedicatedSchemaPkg in jsonSchema2PoJo).value,
         (pojoFiles in jsonSchema2PoJo).value,
         streams.value.log("jsonschema2pojo")),
     sourceGenerators in Compile += jsonSchema2PoJo.taskValue
@@ -58,7 +65,7 @@ object JsonSchema2PoJoPlugin extends AutoPlugin {
 }
 
 object JsonSchema2PoJo {
-  def apply(sources: Seq[File], pkg: String, outputs: File, logger: sbt.Logger): Seq[File] = {
+  def apply(sources: Seq[File], pkg: String, dedicatedSchemaPkg: Boolean, outputs: File, logger: sbt.Logger): Seq[File] = {
     if (sources.isEmpty) sources
     else {
       logger.info(f"Generating PoJo from ${sources.size} Json Schemas")
@@ -70,8 +77,9 @@ object JsonSchema2PoJo {
 
       sources.map { source =>
         val name = source.getName.split('.')(0)
-        logger.info(f"Generate PoJo: $pkg.$name")
-        schemaMapper.generate(codeModel, name, f"$pkg.$name", source.toURI.toURL)
+        val schemaPkg = if (dedicatedSchemaPkg) f"$pkg.$name" else pkg
+        logger.info(f"Generate PoJo: $name")
+        schemaMapper.generate(codeModel, name, schemaPkg, source.toURI.toURL)
       }
 
       codeModel.build(outputs, null.asInstanceOf[PrintStream])
