@@ -1,117 +1,224 @@
 package sbtjsonschema2pojo
 
-import java.io.{PrintStream, File, FilenameFilter}
+import java.{io, util}
 
-import com.sun.codemodel.JCodeModel
-import org.jsonschema2pojo.rules.RuleFactory
 import org.jsonschema2pojo._
+import org.jsonschema2pojo.rules.RuleFactory
 import sbt.Keys._
 import sbt._
 
-object JsonSchema2PoJoPlugin extends AutoPlugin {
-  override def requires = plugins.JvmPlugin
+import scala.collection.JavaConversions._
 
-  override def trigger = allRequirements
+object JsonSchema2PoJoPlugin extends AutoPlugin {
 
   object autoImport {
-    lazy val jsonSchema2PoJo = taskKey[Seq[File]]("Generate Java PoJo from Json Schemas")
-
-    lazy val jsonSchemasDefault = settingKey[Seq[File]]("Default Json Schemas")
-    lazy val jsonSchemas = settingKey[Seq[File]]("Json Schemas")
-
-    lazy val pojoPackageDefault = settingKey[String]("Default PoJo package")
-    lazy val pojoPackage = settingKey[String]("PoJo package")
-
-    lazy val pojoFilesDefault = settingKey[File]("Default PoJo output files path")
-    lazy val pojoFiles = settingKey[File]("PoJo output files path")
+    lazy val jsonSchema2PoJo = taskKey[Seq[File]]("Task for generate Java PoJo from Json Schemas")
     
-    lazy val dedicatedSchemaPkgDefault = settingKey[Boolean]("Default setting to PoJo output to pkg include schema name")
-    lazy val dedicatedSchemaPkg = settingKey[Boolean]("PoJo output to pkg include schema name")
+    lazy val generationConfig = settingKey[GenerationConfig]("Generation config")
 
-    lazy val useJodaTimeDefault = settingKey[Boolean]("Default setting for useJodaTime")
-    lazy val useJodaTime = settingKey[Boolean]("Setting for useJodaTime")
+    lazy val generateBuilders = settingKey[Boolean]("The 'generateBuilders' configuration option")
+
+    lazy val usePrimitives = settingKey[Boolean]("The 'usePrimitives' configuration option")
+
+    lazy val jsonSchemas = settingKey[Seq[File]]("The 'sources' configuration option")
+
+    lazy val targetDirectory = settingKey[File]("The 'targetDirectory' configuration option")
+
+    lazy val targetPackage = settingKey[String]("The 'targetPackage' configuration option")
+
+    lazy val propertyWordDelimiters = settingKey[Array[Char]]("The 'propertyWordDelimiters' configuration option")
+
+    lazy val useLongIntegers = settingKey[Boolean]("The 'useLongIntegers' configuration option")
+
+    lazy val useDoubleNumbers = settingKey[Boolean]("The 'useDoubleNumbers' configuration option")
+
+    lazy val includeHashcodeAndEquals = settingKey[Boolean]("The 'includeHashcodeAndEquals' configuration option")
+
+    lazy val includeToString = settingKey[Boolean]("The 'includeToString' configuration option")
+
+    lazy val annotationStyle = settingKey[AnnotationStyle]("The 'annotationStyle' configuration option")
+
+    lazy val customAnnotator = settingKey[Class[_ <: Annotator]]("The 'customAnnotator' configuration option")
+
+    lazy val customRuleFactory = settingKey[Class[_ <: RuleFactory]]("The 'customRuleFactory' configuration option")
+
+    lazy val includeJsr303Annotations = settingKey[Boolean]("The 'includeJsr303Annotations' configuration option")
+
+    lazy val sourceType = settingKey[SourceType]("The 'sourceType' configuration option")
+
+    lazy val outputEncoding = settingKey[String]("The 'outputEncoding' configuration option")
+
+    lazy val removeOldOutput = settingKey[Boolean]("The 'removeOldOutput' configuration option")
+
+    lazy val useJodaDates = settingKey[Boolean]("The 'useJodaDates' configuration option")
+
+    lazy val useCommonsLang3 = settingKey[Boolean]("The 'useCommonsLang3' configuration option")
+
+    lazy val fileFilter = settingKey[io.FileFilter]("The 'fileFilter' configuration option")
+
+    lazy val initializeCollections = settingKey[Boolean]("The 'initializeCollections' configuration option")
+
+    lazy val classNamePrefix = settingKey[String]("The 'classNamePrefix' configuration option")
+
+    lazy val classNameSuffix = settingKey[String]("The 'classNameSuffix' configuration option")
   }
 
   import sbtjsonschema2pojo.JsonSchema2PoJoPlugin.autoImport._
 
+  private val defaultConfig = new DefaultGenerationConfig()
+  
+  override def requires = plugins.JvmPlugin
+
+  override def trigger = allRequirements
+  
   lazy val jsonSchema2PoJoSettings: Seq[Def.Setting[_]] = Seq(
-    pojoPackageDefault in jsonSchema2PoJo := "PoJo",
-    pojoPackage in jsonSchema2PoJo <<= (pojoPackage in jsonSchema2PoJo) or (pojoPackageDefault in jsonSchema2PoJo),
-  
-    pojoFilesDefault in jsonSchema2PoJo <<= (sourceManaged in Compile)(sourceManaged =>
-      sourceManaged / "jsnomschema2pojo"
-    ),
-    pojoFiles in jsonSchema2PoJo <<= (pojoFiles in jsonSchema2PoJo) or (pojoFilesDefault in jsonSchema2PoJo),
-  
-    jsonSchemasDefault in jsonSchema2PoJo <<= (resourceDirectory in Compile)(resources =>
-      (resources / "json-schemas").listFiles(new FilenameFilter {
+
+    generateBuilders in jsonSchema2PoJo := defaultConfig.isGenerateBuilders,
+
+    usePrimitives in jsonSchema2PoJo := defaultConfig.isUsePrimitives,
+
+    jsonSchemas in jsonSchema2PoJo <<= (resourceDirectory in Compile)(resources =>
+      (resources / "json-schemas").listFiles(new io.FilenameFilter {
         override def accept(dir: File, name: String): Boolean = name.endsWith(".json")
       }) match {
         case null => Seq[File]()
         case files => files
       }
     ),
-    jsonSchemas in jsonSchema2PoJo <<= (jsonSchemas in jsonSchema2PoJo) or (jsonSchemasDefault in jsonSchema2PoJo),
 
-    dedicatedSchemaPkgDefault in jsonSchema2PoJo := true,
-    dedicatedSchemaPkg in jsonSchema2PoJo <<= (dedicatedSchemaPkg in jsonSchema2PoJo) or (dedicatedSchemaPkgDefault in jsonSchema2PoJo),
+    targetDirectory in jsonSchema2PoJo <<= (sourceManaged in Compile)(sourceManaged =>
+      sourceManaged / "jsnomschema2pojo"
+    ),
 
-    useJodaTimeDefault in jsonSchema2PoJo := false,
-    useJodaTime in jsonSchema2PoJo <<= (useJodaTime in jsonSchema2PoJo) or (useJodaTimeDefault in jsonSchema2PoJo),
+    targetPackage in jsonSchema2PoJo := "PoJo",
 
-    jsonSchema2PoJo :=
-      JsonSchema2PoJo((jsonSchemas in jsonSchema2PoJo).value,
-        new JsonSchema2PoJo.GenerationConfig(
-          (pojoPackage in jsonSchema2PoJo).value,
-          (dedicatedSchemaPkg in jsonSchema2PoJo).value,
-          (useJodaTime in jsonSchema2PoJo).value
-        ),
-        (pojoFiles in jsonSchema2PoJo).value,
-        streams.value.log("jsonschema2pojo")),
+    propertyWordDelimiters in jsonSchema2PoJo := defaultConfig.getPropertyWordDelimiters,
+
+    useLongIntegers in jsonSchema2PoJo := defaultConfig.isUseLongIntegers,
+
+    useDoubleNumbers in jsonSchema2PoJo := defaultConfig.isUseDoubleNumbers,
+
+    includeHashcodeAndEquals in jsonSchema2PoJo := defaultConfig.isIncludeHashcodeAndEquals,
+
+    includeToString in jsonSchema2PoJo := defaultConfig.isIncludeToString,
+  
+    annotationStyle in jsonSchema2PoJo := defaultConfig.getAnnotationStyle,
+
+    customAnnotator in jsonSchema2PoJo := defaultConfig.getCustomAnnotator,
+  
+    customRuleFactory in jsonSchema2PoJo := defaultConfig.getCustomRuleFactory,
+
+    includeJsr303Annotations in jsonSchema2PoJo := defaultConfig.isIncludeJsr303Annotations,
+
+    sourceType in jsonSchema2PoJo := defaultConfig.getSourceType,
+  
+    outputEncoding in jsonSchema2PoJo := defaultConfig.getOutputEncoding,
+
+    removeOldOutput in jsonSchema2PoJo := defaultConfig.isRemoveOldOutput,
+
+    useJodaDates in jsonSchema2PoJo := defaultConfig.isUseJodaDates,
+  
+    useCommonsLang3 in jsonSchema2PoJo := defaultConfig.isUseCommonsLang3,
+
+    fileFilter in jsonSchema2PoJo := defaultConfig.getFileFilter,
+  
+    initializeCollections in jsonSchema2PoJo := defaultConfig.isInitializeCollections,
+  
+    classNamePrefix in jsonSchema2PoJo := defaultConfig.getClassNamePrefix,
+
+    classNameSuffix in jsonSchema2PoJo := defaultConfig.getClassNameSuffix,
+  
+    generationConfig in jsonSchema2PoJo := new GenerationConfig() {
+      override def isGenerateBuilders: Boolean =
+        (generateBuilders in jsonSchema2PoJo).value
+
+      override def isUsePrimitives: Boolean =
+        (usePrimitives in jsonSchema2PoJo).value
+
+      override def getSource: util.Iterator[io.File] =
+        (jsonSchemas in jsonSchema2PoJo).value.iterator
+
+      override def getTargetDirectory: io.File =
+        (targetDirectory in jsonSchema2PoJo).value
+
+      override def getTargetPackage: String =
+        (targetPackage in jsonSchema2PoJo).value
+
+      override def getPropertyWordDelimiters: Array[Char] =
+        (propertyWordDelimiters in jsonSchema2PoJo).value
+
+      override def isUseLongIntegers: Boolean =
+        (useLongIntegers in jsonSchema2PoJo).value
+
+      override def isUseDoubleNumbers: Boolean =
+        (useDoubleNumbers in jsonSchema2PoJo).value
+
+      override def isIncludeHashcodeAndEquals: Boolean =
+        (includeHashcodeAndEquals in jsonSchema2PoJo).value
+
+      override def isIncludeToString: Boolean =
+        (includeToString in jsonSchema2PoJo).value
+
+      override def getAnnotationStyle: AnnotationStyle =
+        (annotationStyle in jsonSchema2PoJo).value
+
+      override def getCustomAnnotator: Class[_ <: Annotator] =
+        (customAnnotator in jsonSchema2PoJo).value
+
+      override def getCustomRuleFactory: Class[_ <: RuleFactory] =
+        (customRuleFactory in jsonSchema2PoJo).value
+
+      override def isIncludeJsr303Annotations: Boolean =
+        (includeJsr303Annotations in jsonSchema2PoJo).value
+
+      override def getSourceType: SourceType =
+        (sourceType in jsonSchema2PoJo).value
+
+      override def getOutputEncoding: String =
+        (outputEncoding in jsonSchema2PoJo).value
+
+      override def isRemoveOldOutput: Boolean =
+        (removeOldOutput in jsonSchema2PoJo).value
+
+      override def isUseJodaDates: Boolean =
+        (useJodaDates in jsonSchema2PoJo).value
+
+      override def isUseCommonsLang3: Boolean =
+        (useCommonsLang3 in jsonSchema2PoJo).value
+
+      override def getFileFilter: io.FileFilter =
+        (fileFilter in jsonSchema2PoJo).value
+
+      override def isInitializeCollections: Boolean =
+        (initializeCollections in jsonSchema2PoJo).value
+
+      override def getClassNamePrefix: String =
+        (classNamePrefix in jsonSchema2PoJo).value
+
+      override def getClassNameSuffix: String =
+        (classNameSuffix in jsonSchema2PoJo).value
+    },
+  
+    jsonSchema2PoJo := JsonSchema2PoJoGenerate((generationConfig in jsonSchema2PoJo).value),
+  
     sourceGenerators in Compile += jsonSchema2PoJo.taskValue
   )
 
-  override lazy val projectSettings = inConfig(Compile)(jsonSchema2PoJoSettings)
+  override lazy val projectSettings = jsonSchema2PoJoSettings
 }
 
-object JsonSchema2PoJo {
+object JsonSchema2PoJoGenerate {
   
-  class GenerationConfig(
-    val pkg: String,
-    val dedicatedSchemaPkg: Boolean,
-    val useJodaDates: Boolean)
-    extends DefaultGenerationConfig {
-    
-    override def isUseJodaDates: Boolean = useJodaDates
+  def recursiveListFiles(f: File): Array[File] = {
+    val these = f.listFiles
+    these.filter(_.isFile) ++ these.filter(_.isDirectory).flatMap(recursiveListFiles)
   }
-  
-  def apply(sources: Seq[File], generationConfig: GenerationConfig, outputs: File, logger: sbt.Logger): Seq[File] = {
-    if (sources.isEmpty) sources
+
+  def apply(config: GenerationConfig): Seq[File] = {
+    if (!config.getSource.hasNext) Seq[File]()
     else {
-      logger.info(f"Generating PoJo from ${sources.size} Json Schemas")
-      if (!outputs.exists())
-        outputs.mkdirs()
-
-      val codeModel = new JCodeModel()
-      val ruleFactory = new RuleFactory(generationConfig, new Jackson2Annotator(), new SchemaStore())
-      val schemaMapper = new SchemaMapper(ruleFactory, new SchemaGenerator())
-
-      sources.map { source =>
-        val name = source.getName.split('.')(0)
-        val schemaPkg =
-          if (generationConfig.dedicatedSchemaPkg) f"${generationConfig.pkg}.$name"
-          else generationConfig.pkg
-        logger.info(f"Generate PoJo: $name")
-        schemaMapper.generate(codeModel, name, schemaPkg, source.toURI.toURL)
-      }
-
-      codeModel.build(outputs, null.asInstanceOf[PrintStream])
-      
-      def recursiveListFiles(f: File): Array[File] = {
-        val these = f.listFiles
-        these.filter(_.isFile) ++ these.filter(_.isDirectory).flatMap(recursiveListFiles)
-      }
-      recursiveListFiles(outputs)
+      Jsonschema2Pojo.generate(config)
+      recursiveListFiles(config.getTargetDirectory)
     }
   }
 }

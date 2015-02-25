@@ -9,7 +9,7 @@ Create at your sbt project file `project/jsonschema2pojo.sbt` with following con
 resolvers += Resolver.url("sbt-jsonschema2pojo-plugin-releases",
    url("http://dl.bintray.com/catap/sbt-plugins/"))(Resolver.ivyStylePatterns)
        
-addSbtPlugin("com.github.catap" % "sbt-jsonschema2pojo" % "0.1")
+addSbtPlugin("com.github.catap" % "sbt-jsonschema2pojo" % "0.3")
 ```
 
 Generated PoJo required [commons-lang](http://commons.apache.org/proper/commons-lang/) and [jackson-databind](https://github.com/FasterXML/jackson-databind/).
@@ -42,5 +42,34 @@ jsonSchemas in jsonSchema2PoJo := (baseDirectory.value / "schemas").listFiles(ne
 All generated files that include to `PoJo` package. You can specialized it by following command:
 
 ```scala
-pojoPackage in jsonSchema2PoJo := "com.company.PoJo"
+targetPackage in jsonSchema2PoJo := "com.company.PoJo"
+```
+
+### All options
+
+This plugin support following options. For detail information about options please looking at [JsonSchema2PoJo documentation](https://github.com/joelittlejohn/jsonschema2pojo).
+```
+generateBuilders
+usePrimitives
+schemas
+targetDirectory
+targetPackage
+propertyWordDelimiters
+useLongIntegers
+useDoubleNumbers
+includeHashcodeAndEquals
+includeToString
+annotationStyle
+customAnnotator
+customRuleFactory
+includeJsr303Annotations
+sourceType
+outputEncoding
+removeOldOutput
+useJodaDates
+useCommonsLang3
+fileFilter
+initializeCollections
+classNamePrefix
+classNameSuffix
 ```

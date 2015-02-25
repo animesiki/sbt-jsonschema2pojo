@@ -2,7 +2,7 @@ import bintray.Keys._
 
 sbtPlugin := true
 
-version := "0.2.1"
+version := "0.3"
 
 name := "sbt-jsonschema2pojo"
 
