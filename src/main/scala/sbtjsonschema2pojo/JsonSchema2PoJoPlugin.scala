@@ -3,7 +3,8 @@ package sbtjsonschema2pojo
 import java.io.{PrintStream, File, FilenameFilter}
 
 import com.sun.codemodel.JCodeModel
-import org.jsonschema2pojo.SchemaMapper
+import org.jsonschema2pojo.rules.RuleFactory
+import org.jsonschema2pojo._
 import sbt.Keys._
 import sbt._
 
@@ -26,6 +27,9 @@ object JsonSchema2PoJoPlugin extends AutoPlugin {
     
     lazy val dedicatedSchemaPkgDefault = settingKey[Boolean]("Default setting to PoJo output to pkg include schema name")
     lazy val dedicatedSchemaPkg = settingKey[Boolean]("PoJo output to pkg include schema name")
+
+    lazy val useJodaTimeDefault = settingKey[Boolean]("Default setting for useJodaTime")
+    lazy val useJodaTime = settingKey[Boolean]("Setting for useJodaTime")
   }
 
   import sbtjsonschema2pojo.JsonSchema2PoJoPlugin.autoImport._
@@ -51,11 +55,17 @@ object JsonSchema2PoJoPlugin extends AutoPlugin {
 
     dedicatedSchemaPkgDefault in jsonSchema2PoJo := true,
     dedicatedSchemaPkg in jsonSchema2PoJo <<= (dedicatedSchemaPkg in jsonSchema2PoJo) or (dedicatedSchemaPkgDefault in jsonSchema2PoJo),
-  
+
+    useJodaTimeDefault in jsonSchema2PoJo := false,
+    useJodaTime in jsonSchema2PoJo <<= (useJodaTime in jsonSchema2PoJo) or (useJodaTimeDefault in jsonSchema2PoJo),
+
     jsonSchema2PoJo :=
       JsonSchema2PoJo((jsonSchemas in jsonSchema2PoJo).value,
-        (pojoPackage in jsonSchema2PoJo).value,
-        (dedicatedSchemaPkg in jsonSchema2PoJo).value,
+        new JsonSchema2PoJo.GenerationConfig(
+          (pojoPackage in jsonSchema2PoJo).value,
+          (dedicatedSchemaPkg in jsonSchema2PoJo).value,
+          (useJodaTime in jsonSchema2PoJo).value
+        ),
         (pojoFiles in jsonSchema2PoJo).value,
         streams.value.log("jsonschema2pojo")),
     sourceGenerators in Compile += jsonSchema2PoJo.taskValue
@@ -65,7 +75,17 @@ object JsonSchema2PoJoPlugin extends AutoPlugin {
 }
 
 object JsonSchema2PoJo {
-  def apply(sources: Seq[File], pkg: String, dedicatedSchemaPkg: Boolean, outputs: File, logger: sbt.Logger): Seq[File] = {
+  
+  class GenerationConfig(
+    val pkg: String,
+    val dedicatedSchemaPkg: Boolean,
+    val useJodaDates: Boolean)
+    extends DefaultGenerationConfig {
+    
+    override def isUseJodaDates: Boolean = useJodaDates
+  }
+  
+  def apply(sources: Seq[File], generationConfig: GenerationConfig, outputs: File, logger: sbt.Logger): Seq[File] = {
     if (sources.isEmpty) sources
     else {
       logger.info(f"Generating PoJo from ${sources.size} Json Schemas")
@@ -73,11 +93,14 @@ object JsonSchema2PoJo {
         outputs.mkdirs()
 
       val codeModel = new JCodeModel()
-      val schemaMapper = new SchemaMapper()
+      val ruleFactory = new RuleFactory(generationConfig, new Jackson2Annotator(), new SchemaStore())
+      val schemaMapper = new SchemaMapper(ruleFactory, new SchemaGenerator())
 
       sources.map { source =>
         val name = source.getName.split('.')(0)
-        val schemaPkg = if (dedicatedSchemaPkg) f"$pkg.$name" else pkg
+        val schemaPkg =
+          if (generationConfig.dedicatedSchemaPkg) f"${generationConfig.pkg}.$name"
+          else generationConfig.pkg
         logger.info(f"Generate PoJo: $name")
         schemaMapper.generate(codeModel, name, schemaPkg, source.toURI.toURL)
       }
